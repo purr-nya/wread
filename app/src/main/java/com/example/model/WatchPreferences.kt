@@ -11,8 +11,8 @@ enum class ScreenShape(val displayName: String) {
 }
 
 enum class ReadingMode(val displayName: String) {
-    PAGED("点按翻页"),
-    VERTICAL_SCROLL("竖向滚动")
+    VERTICAL_SCROLL("长条滚动(Webtoon)"),
+    PAGED("点按翻页")
 }
 
 enum class EdgeTapScheme(val displayName: String) {
@@ -75,7 +75,7 @@ data class WatchSettings(
     val lineSpacingMultiplier: Float = 1.35f,
     val screenShape: ScreenShape = ScreenShape.ROUNDED_SQUARE,
     val watchTheme: WatchTheme = WatchTheme.OLED_BLACK,
-    val readingMode: ReadingMode = ReadingMode.PAGED,
+    val readingMode: ReadingMode = ReadingMode.VERTICAL_SCROLL,
     val edgeTapScheme: EdgeTapScheme = EdgeTapScheme.TOP_BOTTOM,
     val keepScreenOn: Boolean = true,
     val vibrateOnFlip: Boolean = true,
@@ -88,7 +88,7 @@ data class WatchSettings(
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             val shapeName = prefs.getString("screenShape", ScreenShape.ROUNDED_SQUARE.name) ?: ScreenShape.ROUNDED_SQUARE.name
             val themeName = prefs.getString("watchTheme", WatchTheme.OLED_BLACK.name) ?: WatchTheme.OLED_BLACK.name
-            val modeName = prefs.getString("readingMode", ReadingMode.PAGED.name) ?: ReadingMode.PAGED.name
+            val modeName = prefs.getString("readingMode", ReadingMode.VERTICAL_SCROLL.name) ?: ReadingMode.VERTICAL_SCROLL.name
             val tapSchemeName = prefs.getString("edgeTapScheme", EdgeTapScheme.TOP_BOTTOM.name) ?: EdgeTapScheme.TOP_BOTTOM.name
 
             return WatchSettings(
@@ -96,7 +96,7 @@ data class WatchSettings(
                 lineSpacingMultiplier = prefs.getFloat("lineSpacingMultiplier", 1.35f),
                 screenShape = runCatching { ScreenShape.valueOf(shapeName) }.getOrDefault(ScreenShape.ROUNDED_SQUARE),
                 watchTheme = runCatching { WatchTheme.valueOf(themeName) }.getOrDefault(WatchTheme.OLED_BLACK),
-                readingMode = runCatching { ReadingMode.valueOf(modeName) }.getOrDefault(ReadingMode.PAGED),
+                readingMode = runCatching { ReadingMode.valueOf(modeName) }.getOrDefault(ReadingMode.VERTICAL_SCROLL),
                 edgeTapScheme = runCatching { EdgeTapScheme.valueOf(tapSchemeName) }.getOrDefault(EdgeTapScheme.TOP_BOTTOM),
                 keepScreenOn = prefs.getBoolean("keepScreenOn", true),
                 vibrateOnFlip = prefs.getBoolean("vibrateOnFlip", true),

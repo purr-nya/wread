@@ -7,6 +7,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,6 +30,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -36,6 +39,8 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,6 +49,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -126,38 +132,70 @@ fun ReaderScreen(
         }
     }
 
+    // Reset scroll to top when chapter changes
+    LaunchedEffect(currentChapterIndex) {
+        scrollState.scrollToItem(0, 0)
+        currentPageIndex = 0
+    }
+
     // Handle physical key flips
     LaunchedEffect(keyFlipTrigger) {
         if (keyFlipTrigger != 0) {
-            if (keyFlipTrigger > 0) {
-                // Next page
-                flipNextPage(
-                    pages = pages,
-                    currentPageIndex = currentPageIndex,
-                    currentChapterIndex = currentChapterIndex,
-                    totalChapters = chapters.size,
-                    settings = settings,
-                    context = context,
-                    onSetPage = { currentPageIndex = it },
-                    onChapterChange = onChapterChange
-                )
+            if (settings.readingMode == ReadingMode.VERTICAL_SCROLL) {
+                val scrollDelta = 420f
+                if (keyFlipTrigger > 0) {
+                    scrollState.animateScrollBy(scrollDelta)
+                } else {
+                    scrollState.animateScrollBy(-scrollDelta)
+                }
+                if (settings.vibrateOnFlip) WatchHaptics.tick(context)
             } else {
-                // Prev page
-                flipPrevPage(
-                    pages = pages,
-                    currentPageIndex = currentPageIndex,
-                    currentChapterIndex = currentChapterIndex,
-                    settings = settings,
-                    context = context,
-                    onSetPage = { currentPageIndex = it },
-                    onChapterChange = onChapterChange
-                )
+                if (keyFlipTrigger > 0) {
+                    // Next page
+                    flipNextPage(
+                        pages = pages,
+                        currentPageIndex = currentPageIndex,
+                        currentChapterIndex = currentChapterIndex,
+                        totalChapters = chapters.size,
+                        settings = settings,
+                        context = context,
+                        onSetPage = { currentPageIndex = it },
+                        onChapterChange = onChapterChange
+                    )
+                } else {
+                    // Prev page
+                    flipPrevPage(
+                        pages = pages,
+                        currentPageIndex = currentPageIndex,
+                        currentChapterIndex = currentChapterIndex,
+                        settings = settings,
+                        context = context,
+                        onSetPage = { currentPageIndex = it },
+                        onChapterChange = onChapterChange
+                    )
+                }
             }
         }
     }
 
     // Save reading progress
-    val overallProgressPercent by remember(currentChapterIndex, chapters.size, currentPageIndex, pages.size) {
+    val scrollProgressPercent by remember(currentChapterIndex, chapters.size) {
+        derivedStateOf {
+            if (chapters.isEmpty()) 0f
+            else {
+                val totalItems = scrollState.layoutInfo.totalItemsCount
+                val visibleIndex = scrollState.firstVisibleItemIndex
+                val innerFraction = if (totalItems > 1) {
+                    (visibleIndex.toFloat() / (totalItems - 1).toFloat()).coerceIn(0f, 1f)
+                } else 0f
+                val chapterWeight = 100f / chapters.size
+                val pct = (currentChapterIndex * chapterWeight) + (innerFraction * chapterWeight)
+                pct.coerceIn(0f, 100f)
+            }
+        }
+    }
+
+    val pagedProgressPercent by remember(currentChapterIndex, chapters.size, currentPageIndex, pages.size) {
         derivedStateOf {
             if (chapters.isEmpty()) 0f
             else {
@@ -167,6 +205,12 @@ fun ReaderScreen(
                 pct.coerceIn(0f, 100f)
             }
         }
+    }
+
+    val overallProgressPercent = if (settings.readingMode == ReadingMode.VERTICAL_SCROLL) {
+        scrollProgressPercent
+    } else {
+        pagedProgressPercent
     }
 
     LaunchedEffect(overallProgressPercent, currentChapterIndex, currentPageIndex) {
@@ -241,62 +285,8 @@ fun ReaderScreen(
                                 .fillMaxSize()
                                 .testTag("reader_page_text")
                         )
-                    } else {
-                        // Vertical Scroll mode: segmented paragraphs
-                        val paragraphs = remember(currentChapterText) {
-                            currentChapterText.split("\n\n").filter { it.isNotBlank() }
-                        }
-                        LazyColumn(
-                            state = scrollState,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .testTag("reader_vertical_scroll")
-                        ) {
-                            itemsIndexed(paragraphs) { idx, para ->
-                                Text(
-                                    text = para,
-                                    color = theme.textColor,
-                                    fontSize = settings.fontSizeSp.sp,
-                                    lineHeight = (settings.fontSizeSp * settings.lineSpacingMultiplier).sp,
-                                    modifier = Modifier.padding(bottom = 8.dp)
-                                )
-                            }
-                            item {
-                                // Bottom chapter change hint
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 16.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    if (currentChapterIndex > 0) {
-                                        FilledTonalButton(
-                                            onClick = { onChapterChange(currentChapterIndex - 1) },
-                                            colors = ButtonDefaults.filledTonalButtonColors(containerColor = theme.cardBackground),
-                                            modifier = Modifier.height(34.dp)
-                                        ) {
-                                            Text("上一章", color = theme.textColor, fontSize = 11.sp)
-                                        }
-                                    } else {
-                                        Spacer(modifier = Modifier.width(1.dp))
-                                    }
 
-                                    if (currentChapterIndex + 1 < chapters.size) {
-                                        FilledTonalButton(
-                                            onClick = { onChapterChange(currentChapterIndex + 1) },
-                                            colors = ButtonDefaults.filledTonalButtonColors(containerColor = theme.accentColor),
-                                            modifier = Modifier.height(34.dp)
-                                        ) {
-                                            Text("下一章", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Touch Zone Overlays (Intercepts clicks without horizontal swipe to prevent watch system back exit!)
-                    if (settings.readingMode == ReadingMode.PAGED) {
+                        // Touch Zone Overlays for Paged mode
                         if (settings.edgeTapScheme == EdgeTapScheme.TOP_BOTTOM) {
                             Column(modifier = Modifier.fillMaxSize()) {
                                 // Top zone (32%): Prev Page
@@ -412,18 +402,194 @@ fun ReaderScreen(
                             }
                         }
                     } else {
-                        // In vertical scroll mode, tapping center opens HUD
-                        Box(
+                        // Webtoon-style continuous vertical scrolling
+                        val paragraphs = remember(currentChapterText) {
+                            currentChapterText.split("\n\n").filter { it.isNotBlank() }
+                        }
+
+                        LazyColumn(
+                            state = scrollState,
                             modifier = Modifier
-                                .align(Alignment.Center)
-                                .size(64.dp)
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null
-                                ) {
-                                    showHud = !showHud
+                                .fillMaxSize()
+                                .pointerInput(Unit) {
+                                    detectTapGestures(
+                                        onTap = { offset ->
+                                            val h = size.height
+                                            val y = offset.y
+                                            if (y < h * 0.22f) {
+                                                // Tap top 22%: smooth scroll up
+                                                scope.launch {
+                                                    scrollState.animateScrollBy(-420f)
+                                                }
+                                                if (settings.vibrateOnFlip) WatchHaptics.tick(context)
+                                            } else if (y > h * 0.78f) {
+                                                // Tap bottom 22%: smooth scroll down
+                                                scope.launch {
+                                                    scrollState.animateScrollBy(420f)
+                                                }
+                                                if (settings.vibrateOnFlip) WatchHaptics.tick(context)
+                                            } else {
+                                                // Center area tap: toggle HUD
+                                                showHud = !showHud
+                                            }
+                                        }
+                                    )
                                 }
-                        )
+                                .testTag("reader_vertical_scroll")
+                        ) {
+                            // Chapter header banner
+                            item {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 8.dp, bottom = 12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(theme.accentColor.copy(alpha = 0.18f))
+                                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = "第 ${currentChapterIndex + 1} 话",
+                                            color = theme.accentColor,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = chapterTitle,
+                                        color = theme.textColor,
+                                        fontSize = (settings.fontSizeSp + 2).sp,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .width(44.dp)
+                                            .height(2.dp)
+                                            .background(theme.accentColor.copy(alpha = 0.35f))
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                }
+                            }
+
+                            // Continuous paragraphs
+                            itemsIndexed(paragraphs) { idx, para ->
+                                Text(
+                                    text = para,
+                                    color = theme.textColor,
+                                    fontSize = settings.fontSizeSp.sp,
+                                    lineHeight = (settings.fontSizeSp * settings.lineSpacingMultiplier).sp,
+                                    modifier = Modifier.padding(bottom = 10.dp)
+                                )
+                            }
+
+                            // Webtoon chapter end card
+                            item {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 16.dp, bottom = 28.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .width(60.dp)
+                                            .height(1.dp)
+                                            .background(theme.secondaryTextColor.copy(alpha = 0.3f))
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Text(
+                                        text = "—— 本话阅读完毕 ——",
+                                        color = theme.secondaryTextColor,
+                                        fontSize = 11.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+
+                                    if (currentChapterIndex + 1 < chapters.size) {
+                                        val nextChapter = chapters[currentChapterIndex + 1]
+                                        Card(
+                                            colors = CardDefaults.cardColors(containerColor = theme.cardBackground),
+                                            shape = RoundedCornerShape(12.dp),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .clickable {
+                                                    onChapterChange(currentChapterIndex + 1)
+                                                    if (settings.vibrateOnFlip) WatchHaptics.doubleTick(context)
+                                                }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = "进入下一话 ➔",
+                                                        color = theme.accentColor,
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                    Spacer(modifier = Modifier.height(2.dp))
+                                                    Text(
+                                                        text = nextChapter.title,
+                                                        color = theme.textColor,
+                                                        fontSize = 12.sp,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                                Icon(
+                                                    Icons.AutoMirrored.Filled.ArrowForward,
+                                                    contentDescription = null,
+                                                    tint = theme.accentColor,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        Text(
+                                            text = "🎉 已读完本书全部章节",
+                                            color = theme.accentColor,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        FilledTonalButton(
+                                            onClick = onBack,
+                                            colors = ButtonDefaults.filledTonalButtonColors(containerColor = theme.cardBackground),
+                                            modifier = Modifier.height(34.dp)
+                                        ) {
+                                            Text("返回书架", color = theme.textColor, fontSize = 11.sp)
+                                        }
+                                    }
+
+                                    if (currentChapterIndex > 0) {
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Text(
+                                            text = "返回上一话",
+                                            color = theme.secondaryTextColor,
+                                            fontSize = 11.sp,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .clickable {
+                                                    onChapterChange(currentChapterIndex - 1)
+                                                    if (settings.vibrateOnFlip) WatchHaptics.tick(context)
+                                                }
+                                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
