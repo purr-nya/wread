@@ -1,0 +1,6 @@
+{
+  "name": "WristReader",
+  "description": "Lightweight Android smartwatch novel reader with round/square screen adaptation, edge-tap paging, physical button support, and low-memory TXT/EPUB parsing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

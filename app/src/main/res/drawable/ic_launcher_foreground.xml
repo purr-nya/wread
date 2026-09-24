@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Watch reader open book symbol -->
+    <!-- Left page -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M52,38 C42,35 32,37 26,40 C25.4,40.3 25,40.9 25,41.6 L25,69 C25,70.1 26.1,70.9 27.2,70.6 C33,68.8 41.5,67 52,70 Z" />
+    <!-- Right page -->
+    <path
+        android:fillColor="#0284C7"
+        android:pathData="M56,38 C66,35 76,37 82,40 C82.6,40.3 83,40.9 83,41.6 L83,69 C83,70.1 81.9,70.9 80.8,70.6 C75,68.8 66.5,67 56,70 Z" />
+    <!-- Center spine / bookmark ribbon in vibrant gold -->
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M52.5,33 L55.5,33 L55.5,58 L54,55 L52.5,58 Z" />
+    <!-- Lines of text left page -->
+    <path
+        android:fillColor="#E0F2FE"
+        android:pathData="M31,47 L47,45.5 L47,47.5 L31,49 Z M31,53 L47,51.5 L47,53.5 L31,55 Z M31,59 L44,57.7 L44,59.7 L31,61 Z" />
+    <!-- Lines of text right page -->
+    <path
+        android:fillColor="#BAE6FD"
+        android:pathData="M61,45.5 L77,47 L77,49 L61,47.5 Z M61,51.5 L77,53 L77,55 L61,53.5 Z M64,57.7 L77,59 L77,61 L64,59.7 Z" />
+</vector>
